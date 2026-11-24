@@ -40,7 +40,7 @@ export default function App() {
     setDraft('');
 
     try {
-      const response = await fetch('http://127.0.0.1:3001/api/chat', {
+      const response = await fetch('https://cutie-ai-3-0.onrender.com/api/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({message})
@@ -55,7 +55,7 @@ export default function App() {
         role: "cutie"
       }]);
 
-      const voiceResponse = await fetch("http://127.0.0.1:3001/api/voice", {
+      const voiceResponse = await fetch("https://cutie-ai-3-0.onrender.com/api/voice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: data.reply })
@@ -70,7 +70,7 @@ export default function App() {
     } catch (error) {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
-        text: 'Sorry Boss! ' + error.message
+        role: 'cutie', text: 'Sorry Boss! ' + error.message
       }]);
     }
   };
@@ -84,7 +84,7 @@ export default function App() {
       return;
     }
     try {
-      const response = await fetch("http://127.0.0.1:3001/api/voice", {
+      const response = await fetch("https://cutie-ai-3-0.onrender.com/api/voice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: lastReply.text })
@@ -170,7 +170,7 @@ export default function App() {
             </div>
             {messages.map(msg => (
               <div className="premium-message boss-msg" key={msg.id}>
-                <div><b>{msg.role === "cutie" ? "💜 Cutie" : "Boss"}</b><p>{msg.text}</p></div>
+                <div><b>{(msg.role === "cutie" || msg.text.startsWith("Sorry Boss!")) ? "💜 Cutie" : "Boss"}</b><p>{msg.text}</p></div>
               </div>
             ))}
           </div>
