@@ -1,0 +1,188 @@
+import React, { useState } from 'react';
+import './App.css';
+
+const features = [
+  { icon: '💬', name: 'AI Chat', desc: 'Talk with Cutie', color: 'pink' },
+  { icon: '🎨', name: 'AI Image', desc: 'Generate Images', color: 'purple' },
+  { icon: '🎬', name: 'AI Video', desc: 'Create Videos', color: 'blue' },
+  { icon: '🎙️', name: 'AI Voice', desc: 'Speak with me', color: 'pink' },
+  { icon: '💡', name: 'AI Tools', desc: 'More AI Utilities', color: 'purple' }
+];
+
+const menu = [
+  { icon: '⌂', name: 'Home' },
+  { icon: '☏', name: 'Chat' },
+  { icon: '▦', name: 'Tools' },
+  { icon: '◷', name: 'History' },
+  { icon: '♙', name: 'Profile' }
+];
+
+export default function App() {
+  const [active, setActive] = useState('Home');
+  const [messages, setMessages] = useState([]);
+  const [draft, setDraft] = useState('');
+
+  const sendMessage = async (e) => {
+    e.preventDefault();
+    const message = draft.trim();
+    if (!message) return;
+
+    setMessages(prev => [...prev, {id: Date.now(), text: message, role: "boss"}]);
+    setDraft('');
+
+    try {
+      const response = await fetch('http://127.0.0.1:3001/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message})
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'AI request failed');
+
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        text: data.reply,
+        role: "cutie"
+      }]);
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        text: 'Sorry Boss! ' + error.message
+      }]);
+    }
+  };
+
+
+
+  const speakMessage = async () => {
+    const lastReply = [...messages].reverse().find(msg => msg.role === "cutie");
+    if (!lastReply) {
+      alert("আগে Cutie-কে একটি message পাঠাও!");
+      return;
+    }
+    try {
+      const response = await fetch("http://127.0.0.1:3001/api/voice", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: lastReply.text })
+      });
+      if (!response.ok) throw new Error("Voice API failed");
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => URL.revokeObjectURL(url);
+      await audio.play();
+    } catch (error) {
+      alert("Voice error: " + error.message);
+    }
+  };
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="brand">
+          <div className="logo">💜</div>
+          <div>
+            <h2>Cutie AI <span>3.0</span></h2>
+            <p><i/> Online · Your Personal AI Companion</p>
+          </div>
+        </div>
+        <button className="pro">♛ Pro</button>
+      </header>
+
+      <main>
+        {active === 'Home' ? (
+          <>
+            <section className="hero">
+              <div className="avatar">👩🏻‍🎤</div>
+              <div className="tag">✦ AI COMPANION</div>
+              <h1>Hey Boss! <span>💜</span></h1>
+              <h3>আমি তোমার Cutie! 🥰</h3>
+              <p>Your Personal AI Companion</p>
+              <div className="wave">〰〰〰〰〰</div>
+            </section>
+
+            <div className="section-title">
+              <h3>Explore Features</h3>
+              <span>✨ AI POWERED</span>
+            </div>
+
+            <section className="features">
+              {features.map((item, i) => (
+                <button
+                  key={item.name}
+                  className={`feature ${item.color} ${i === 4 ? 'wide' : ''}`}
+                  onClick={() => setActive(item.name)}
+                >
+                  <span className="feature-icon">{item.icon}</span>
+                  <div>
+                    <h3>{item.name}</h3>
+                    <p>{item.desc}</p>
+                  </div>
+                  <b>›</b>
+                </button>
+              ))}
+            </section>
+
+          </>
+        ) : active === "Chat" ? (
+        <section className="premium-chat-room">
+          <div className="premium-chat-header">
+            <button onClick={() => setActive('Home')}>←</button>
+            <span>💜</span>
+            <div>
+              <h3>Cutie AI</h3>
+              <p>🟢 Online · Your AI Companion</p>
+            </div>
+          </div>
+          <div className="premium-chat-body">
+            <div className="chat-welcome">
+              <div className="welcome-avatar">👩🏻‍🎤</div>
+              <h2>Hey Boss! 💜</h2>
+              <p>আমি তোমার Cutie! 🥰</p>
+            </div>
+            <div className="premium-message cutie-msg">
+              <span>💜</span>
+              <div><b>Cutie</b><p>হ্যালো Boss! কেমন আছো? ❤️</p></div>
+            </div>
+            {messages.map(msg => (
+              <div className="premium-message boss-msg" key={msg.id}>
+                <div><b>{msg.role === "cutie" ? "💜 Cutie" : "Boss"}</b><p>{msg.text}</p></div>
+              </div>
+            ))}
+          </div>
+          <form className="premium-chat-input" onSubmit={sendMessage}>
+            <button type="button">＋</button>
+            <input value={draft}
+              onChange={e => setDraft(e.target.value)}
+              placeholder="Message Cutie..." />
+            <button type="button" onClick={speakMessage}>🎙️</button>
+            <button className="premium-send" type="submit">➤</button>
+          </form>
+        </section>) : (
+        <section className="other-page">
+            <div className="avatar">💜</div>
+            <h1>{active}</h1>
+            <p>Welcome to Cutie AI 3.0</p>
+            <p className="coming">✨ This feature will be connected soon.</p>
+            <button onClick={() => setActive('Home')}>← Back Home</button>
+          </section>
+        )}
+      </main>
+
+      <nav className="bottom">
+        {menu.map(item => (
+          <button
+            key={item.name}
+            className={active === item.name ? 'selected' : ''}
+            onClick={() => setActive(item.name)}
+          >
+            <span>{item.icon}</span>
+            {item.name}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
