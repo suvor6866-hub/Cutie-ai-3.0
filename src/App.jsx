@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 import './App.css';
 
 const features = [
@@ -21,17 +22,30 @@ export default function App() {
   const [active, setActive] = useState('Home');
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
-  const startVoice = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return alert('Chrome Speech Recognition support নেই।');
-    const rec = new SR();
-    rec.lang = 'bn-IN';
-    rec.onresult = e => { const transcript = e.results[0][0].transcript; setDraft(transcript); sendMessage(null, transcript); };
-    rec.onerror = () => alert('Microphone permission পরীক্ষা করো।');
-    rec.start();
-  };
+  const startVoice = async () => {
+  try {
+    await SpeechRecognition.requestPermissions();
+    const { available } = await SpeechRecognition.available();
+    if (!available) {
+      alert('এই ফোনে Speech Recognition পাওয়া যাচ্ছে না।');
+      return;
+    }
+    const result = await SpeechRecognition.start({
+      language: 'bn-IN',
+      maxResults: 1,
+      partialResults: false
+    });
+    const transcript = result.matches?.[0]?.trim();
+    if (transcript) {
+      setDraft(transcript);
+      await sendMessage(null, transcript);
+    }
+  } catch (error) {
+    alert('Voice error: ' + (error?.message || error));
+  }
+};
 
-  const sendMessage = async (e, voiceText) => {
+const sendMessage = async (e, voiceText) => {
     if (e) e.preventDefault();
     const message = (voiceText || draft).trim();
     if (!message) return;
