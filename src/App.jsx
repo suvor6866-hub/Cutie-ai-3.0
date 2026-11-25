@@ -98,7 +98,7 @@ export default function App() {
   const openRequestedApp = async (text) => {
     if (Capacitor.getPlatform() !== 'android') return false;
     const command = text.toLowerCase();
-    if (!/(খোলো|খুলে দাও|চালু করো|open|launch|start)/i.test(command)) return false;
+    if (!/(খোলো|খুলে দাও|চালু করো|ওপেন কর|ওপেন করে দাও|open|launch|start)/i.test(command)) return false;
 
     const apps = [
       { names: ['youtube', 'ইউটিউব'], id: 'com.google.android.youtube', label: 'YouTube' },
