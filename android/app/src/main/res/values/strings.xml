@@ -4,4 +4,5 @@
     <string name="title_activity_main">Cutie AI</string>
     <string name="package_name">com.suvor.cutieai</string>
     <string name="custom_url_scheme">com.suvor.cutieai</string>
+    <string name="device_control_description">Allows Cutie AI to perform requested navigation actions.</string>
 </resources>

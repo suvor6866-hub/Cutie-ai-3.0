@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 import './App.css';
 
@@ -19,38 +19,59 @@ const menu = [
 ];
 
 export default function App() {
+  const voiceLoopRef = useRef(false);
   const [active, setActive] = useState('Home');
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
+  const [profileName, setProfileName] = useState(() => localStorage.getItem('cutieProfileName') || 'Boss');
+  const [profileLanguage, setProfileLanguage] = useState(() => localStorage.getItem('cutieProfileLanguage') || 'বাংলা');
+  const [profileVoice, setProfileVoice] = useState(() => localStorage.getItem('cutieProfileVoice') || 'Female');
+  const saveProfile = () => {
+    localStorage.setItem('cutieProfileName', profileName);
+    localStorage.setItem('cutieProfileLanguage', profileLanguage);
+    localStorage.setItem('cutieProfileVoice', profileVoice);
+    alert('Profile saved successfully! 💜');
+  };
+
+
   const startVoice = async () => {
-  try {
-    await SpeechRecognition.requestPermissions();
-    const { available } = await SpeechRecognition.available();
-    if (!available) {
-      alert('এই ফোনে Speech Recognition পাওয়া যাচ্ছে না।');
+    if (voiceLoopRef.current) {
+      voiceLoopRef.current = false;
+      try { await SpeechRecognition.stop(); } catch {}
       return;
     }
-    const result = await SpeechRecognition.start({
-      language: 'bn-IN',
-      maxResults: 1,
-      partialResults: false
-    });
-    const transcript = result.matches?.[0]?.trim();
-    if (transcript) {
-      setDraft(transcript);
-      await sendMessage(null, transcript);
-    }
-  } catch (error) {
-    alert('Voice error: ' + (error?.message || error));
-  }
-};
 
-const sendMessage = async (e, voiceText) => {
+    voiceLoopRef.current = true;
+    try {
+      await SpeechRecognition.requestPermissions();
+      const { available } = await SpeechRecognition.available();
+      if (!available) throw new Error('Speech recognition unavailable');
+
+      while (voiceLoopRef.current) {
+        const result = await SpeechRecognition.start({
+          language: 'bn-IN',
+          maxResults: 1,
+          partialResults: false
+        });
+
+        if (!voiceLoopRef.current) break;
+        const transcript = result.matches?.[0]?.trim();
+        if (transcript) await sendMessage(null, transcript);
+      }
+    } catch (error) {
+      voiceLoopRef.current = false;
+      alert('Voice error: ' + (error?.message || error));
+    }
+  };
+
+  const sendMessage = async (e, voiceText) => {
     if (e) e.preventDefault();
     const message = (voiceText || draft).trim();
     if (!message) return;
 
-    setMessages(prev => [...prev, {id: Date.now(), text: message, role: "boss"}]);
+    setMessages(prev => [...prev, {
+      id: Date.now(), text: message, role: 'boss'
+    }]);
     setDraft('');
 
     try {
@@ -59,37 +80,38 @@ const sendMessage = async (e, voiceText) => {
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({message})
       });
-
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'AI request failed');
 
       setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        text: data.reply,
-        role: "cutie"
+        id: Date.now() + 1, text: data.reply, role: 'cutie'
       }]);
 
-      const voiceResponse = await fetch("https://cutie-ai-3-0.onrender.com/api/voice", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: data.reply })
+      const voiceResponse = await fetch('https://cutie-ai-3-0.onrender.com/api/voice', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({text: data.reply})
       });
+
       if (voiceResponse.ok) {
         const audioBlob = await voiceResponse.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        audio.onended = () => URL.revokeObjectURL(audioUrl);
-        await audio.play();
+        await new Promise(resolve => {
+          audio.onended = resolve;
+          audio.onerror = resolve;
+          audio.play().catch(resolve);
+        });
+        URL.revokeObjectURL(audioUrl);
       }
     } catch (error) {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
-        role: 'cutie', text: 'Sorry Boss! ' + error.message
+        role: 'cutie',
+        text: 'Sorry Boss! ' + error.message
       }]);
     }
   };
-
-
 
   const speakMessage = async () => {
     const lastReply = [...messages].reverse().find(msg => msg.role === "cutie");
@@ -217,8 +239,26 @@ const sendMessage = async (e, voiceText) => {
             <button onClick={sendMessage}>➤</button>
           </div>
         </section>
-) : (
-        <section className="other-page">
+) : active === "Profile" ? (
+          <section className="other-page">
+            <div className="avatar">💜</div>
+            <h1>My Profile</h1>
+            <p>Your Cutie AI Personal Settings</p>
+            <label>Your Name</label>
+            <input value={profileName} onChange={e => setProfileName(e.target.value)} placeholder="Enter your name" />
+            <label>Language</label>
+            <select value={profileLanguage} onChange={e => setProfileLanguage(e.target.value)}>
+              <option>বাংলা</option><option>English</option><option>हिन्दी</option>
+            </select>
+            <label>Voice Preference</label>
+            <select value={profileVoice} onChange={e => setProfileVoice(e.target.value)}>
+              <option value="Female">Female Voice</option><option value="Male">Male Voice</option>
+            </select>
+            <button onClick={saveProfile}>💾 Save Profile</button>
+            <p>Cutie AI 3.0 · Personal AI Companion</p>
+          </section>
+        ) : (
+            <section className="other-page">
             <div className="avatar">💜</div>
             <h1>{active}</h1>
             <p>Welcome to Cutie AI 3.0</p>
