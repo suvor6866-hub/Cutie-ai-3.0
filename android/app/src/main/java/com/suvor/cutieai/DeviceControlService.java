@@ -44,26 +44,30 @@ public class DeviceControlService extends AccessibilityService {
 
         CharSequence description = node.getContentDescription();
         CharSequence text = node.getText();
-
         String label = "";
         if (description != null) label += description.toString() + " ";
         if (text != null) label += text.toString();
 
         String value = label.trim().toLowerCase();
-
         boolean isPlay = value.equals("play")
                 || value.equals("প্লে")
                 || value.equals("চালান")
-                || value.equals("play video");
+                || value.equals("play video")
+                || value.equals("প্লে ভিডিও");
 
-        if (isPlay && node.isClickable()) {
-            return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        if (isPlay) {
+            AccessibilityNodeInfo target = node;
+            for (int i = 0; i < 5 && target != null; i++) {
+                if (target.isClickable()) {
+                    return target.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                }
+                target = target.getParent();
+            }
         }
 
         for (int i = 0; i < node.getChildCount(); i++) {
             if (clickPlayButton(node.getChild(i))) return true;
         }
-
         return false;
     }
 
