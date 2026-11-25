@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 import { AppLauncher } from '@capacitor/app-launcher';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+const DeviceControl = registerPlugin('DeviceControl');
 import './App.css';
 import { createLiveVoice } from './liveVoice';
 
@@ -95,6 +96,37 @@ export default function App() {
   };
 
 
+
+  const handleDeviceControl = async (text) => {
+    if (Capacitor.getPlatform() !== 'android') return false;
+    const command = text.toLowerCase();
+
+    try {
+      if (/অ্যাক্সেসিবিলিটি সেটিংস|accessibility settings/.test(command)) {
+        await DeviceControl.openAccessibilitySettings();
+        return true;
+      }
+
+      if (/ব্যাক যাও|পেছনে যাও|back যাও|go back/i.test(command)) {
+        await DeviceControl.control({ action: 'BACK' });
+        return true;
+      }
+
+      if (/হোমে যাও|হোম স্ক্রিন|go home/i.test(command)) {
+        await DeviceControl.control({ action: 'HOME' });
+        return true;
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        id: Date.now(),
+        role: 'cutie',
+        text: 'Boss, Accessibility Service চালু আছে কি না পরীক্ষা করো 💜'
+      }]);
+      return true;
+    }
+    return false;
+  };
+
   const openRequestedApp = async (text) => {
     if (Capacitor.getPlatform() !== 'android') return false;
     const command = text.toLowerCase();
@@ -126,6 +158,7 @@ export default function App() {
     if (e) e.preventDefault();
     const message = (voiceText || draft).trim();
     if (!message) return;
+    if (await handleDeviceControl(message)) { setDraft(''); return; }
     if (await openRequestedApp(message)) { setDraft(''); return; }
 
     setMessages(prev => [...prev, {
