@@ -1,6 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
+import { AppLauncher } from '@capacitor/app-launcher';
+import { Capacitor } from '@capacitor/core';
 import './App.css';
+import { createLiveVoice } from './liveVoice';
 
 const features = [
   { icon: '💬', name: 'AI Chat', desc: 'Talk with Cutie', color: 'pink' },
@@ -20,6 +23,8 @@ const menu = [
 
 export default function App() {
   const voiceLoopRef = useRef(false);
+  const liveVoiceRef = useRef(null);
+  const [liveStatus, setLiveStatus] = useState('Live বন্ধ');
   const [active, setActive] = useState('Home');
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
@@ -64,10 +69,64 @@ export default function App() {
     }
   };
 
+  const toggleLiveVoice = async () => {
+    if (liveVoiceRef.current) {
+      liveVoiceRef.current.stop();
+      liveVoiceRef.current = null;
+      return;
+    }
+
+    const live = createLiveVoice({
+      onStatus: setLiveStatus,
+      onText: (text) => {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          text,
+          role: 'cutie'
+        }]);
+      },
+      onError: (message) => {
+        setLiveStatus('সমস্যা: ' + message);
+      }
+    });
+
+    liveVoiceRef.current = live;
+    await live.start();
+  };
+
+
+  const openRequestedApp = async (text) => {
+    if (Capacitor.getPlatform() !== 'android') return false;
+    const command = text.toLowerCase();
+    if (!/(খোলো|খুলে দাও|চালু করো|open|launch|start)/i.test(command)) return false;
+
+    const apps = [
+      { names: ['youtube', 'ইউটিউব'], id: 'com.google.android.youtube', label: 'YouTube' },
+      { names: ['whatsapp', 'হোয়াটসঅ্যাপ', 'হোয়াটসঅ্যাপ'], id: 'com.whatsapp', label: 'WhatsApp' },
+      { names: ['chrome', 'ক্রোম'], id: 'com.android.chrome', label: 'Chrome' },
+      { names: ['instagram', 'ইনস্টাগ্রাম'], id: 'com.instagram.android', label: 'Instagram' }
+    ];
+    const app = apps.find(a => a.names.some(n => command.includes(n)));
+    if (!app) return false;
+
+    try {
+      await AppLauncher.openUrl({ url: app.id });
+      setMessages(prev => [...prev, {
+        id: Date.now(), role: 'cutie', text: app.label + ' খোলার চেষ্টা করেছি Boss 💜'
+      }]);
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        id: Date.now(), role: 'cutie', text: app.label + ' খুলতে পারিনি Boss।'
+      }]);
+    }
+    return true;
+  };
+
   const sendMessage = async (e, voiceText) => {
     if (e) e.preventDefault();
     const message = (voiceText || draft).trim();
     if (!message) return;
+    if (await openRequestedApp(message)) { setDraft(''); return; }
 
     setMessages(prev => [...prev, {
       id: Date.now(), text: message, role: 'boss'
@@ -226,15 +285,15 @@ export default function App() {
             <button onClick={() => setActive('Home')}>⚙</button>
           </header>
           <div className="voice-center">
-            <button className="voice-orb" onClick={startVoice}>
+            <button className="voice-orb" onClick={toggleLiveVoice}>
               <span></span>
             </button>
             <h2>হ্যাঁ Boss! 💜</h2>
-            <p>কথা বলো, আমি শুনছি...</p>
+            <p>{liveStatus}</p>
           </div>
           <div className="voice-bottom">
             <input value={draft} onChange={e => setDraft(e.target.value)}
-              placeholder="কথা বলো Boss..." />
+              placeholder="Live-এ কথা বলো Boss..." />
             <button onClick={startVoice}>🎙️</button>
             <button onClick={sendMessage}>➤</button>
           </div>

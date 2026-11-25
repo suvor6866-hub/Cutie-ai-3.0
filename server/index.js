@@ -152,7 +152,11 @@ app.post("/api/voice", async (req, res) => {
   }
 });
 
+const http = require("http");
+const attachLive = require("./live");
+const server = http.createServer(app);
+attachLive(server);
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, "0.0.0.0", () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log(`Cutie AI Backend running on port ${PORT}`);
 });
