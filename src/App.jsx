@@ -133,7 +133,6 @@ export default function App() {
     if (!/(খোলো|খুলে দাও|চালু করো|ওপেন কর|ওপেন করে দাও|open|launch|start)/i.test(command)) return false;
 
     const apps = [
-      { names: ['youtube', 'ইউটিউব'], id: 'com.google.android.youtube', label: 'YouTube' },
       { names: ['whatsapp', 'হোয়াটসঅ্যাপ', 'হোয়াটসঅ্যাপ'], id: 'com.whatsapp', label: 'WhatsApp' },
       { names: ['chrome', 'ক্রোম'], id: 'com.android.chrome', label: 'Chrome' },
       { names: ['instagram', 'ইনস্টাগ্রাম'], id: 'com.instagram.android', label: 'Instagram' }
@@ -154,34 +153,11 @@ export default function App() {
     return true;
   };
 
-
-  const playYouTubeSong = async (text) => {
-    const command = text.toLowerCase();
-    if (!/(গান চালাও|গান বাজাও|গান শোনাও|গান প্লে করো|গান শুনতে চাই|gan chalao|gaan chalao|song play|play song|youtube.*song)/i.test(command)) return false;
-
-    const query = text.replace(/(গান চালাও|গান বাজাও|গান শোনাও|গান প্লে করো|গান শুনতে চাই|gan chalao|gaan chalao|song play|play song|youtube|ইউটিউব)/gi, '').trim() || 'বাংলা গান';
-
-    try {
-      await DeviceControl.openYouTubeSearch({ query });
-      setMessages(prev => [...prev, {
-        id: Date.now(), role: 'cutie',
-        text: query + ' YouTube-এ খুলেছি Boss 💜'
-      }]);
-    } catch (error) {
-      setMessages(prev => [...prev, {
-        id: Date.now(), role: 'cutie',
-        text: 'Boss, YouTube খুলতে পারিনি।'
-      }]);
-    }
-    return true;
-  };
-
   const sendMessage = async (e, voiceText) => {
     if (e) e.preventDefault();
     const message = (voiceText || draft).trim();
     if (!message) return;
     if (await handleDeviceControl(message)) { setDraft(''); return; }
-    if (await playYouTubeSong(message)) { setDraft(''); return; }
     if (await openRequestedApp(message)) { setDraft(''); return; }
 
     setMessages(prev => [...prev, {
