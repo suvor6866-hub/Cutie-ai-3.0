@@ -99,7 +99,31 @@ export default function App() {
 
   const handleDeviceControl = async (text) => {
     if (Capacitor.getPlatform() !== 'android') return false;
-    const command = text.toLowerCase();
+    
+const command = text.toLowerCase();
+
+// YouTube Music Voice Command
+if (/(গান|সঙ্গীত|song|music|youtube|ইউটিউব|play)/i.test(command) &&
+    /(চালাও|শোনাও|play|খোলো|খুলে|open|start)/i.test(command)) {
+  try {
+    await DeviceControl.openYouTubeSearch({
+            query: text
+          });
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      role: 'cutie',
+      text: 'Boss, YouTube-এ তোমার গান খুঁজছি 🎵💜'
+    }]);
+  } catch (error) {
+    setMessages(prev => [...prev, {
+      id: Date.now(),
+      role: 'cutie',
+      text: 'Boss, YouTube খুলতে পারলাম না।'
+    }]);
+  }
+  return true;
+}
+
 
     try {
       if (/অ্যাক্সেসিবিলিটি সেটিংস|accessibility settings/.test(command)) {
@@ -130,7 +154,7 @@ export default function App() {
   const openRequestedApp = async (text) => {
     if (Capacitor.getPlatform() !== 'android') return false;
     const command = text.toLowerCase();
-    if (!/(খোলো|খুলে দাও|চালু করো|ওপেন কর|ওপেন করে দাও|open|launch|start)/i.test(command)) return false;
+    if (!/(খোলো|খুলে দাও|চালু করো|চালাও|শোনাও|ওপেন কর|ওপেন করে দাও|open|launch|start|play)/i.test(command)) return false;
 
     const apps = [
       { names: ['whatsapp', 'হোয়াটসঅ্যাপ', 'হোয়াটসঅ্যাপ'], id: 'com.whatsapp', label: 'WhatsApp' },
@@ -141,7 +165,7 @@ export default function App() {
     if (!app) return false;
 
     try {
-      await AppLauncher.openUrl({ url: app.id });
+      await DeviceControl.openYouTubeSearch({ query: text });
       setMessages(prev => [...prev, {
         id: Date.now(), role: 'cutie', text: app.label + ' খোলার চেষ্টা করেছি Boss 💜'
       }]);
