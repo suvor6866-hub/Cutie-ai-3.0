@@ -49,7 +49,7 @@ public class DeviceControlService extends AccessibilityService {
         if (text != null) label += text.toString();
 
         String value = label.trim().toLowerCase();
-        boolean isPlay = value.equals("play")
+        boolean isPlay = value.contains("play")
                 || value.equals("প্লে")
                 || value.equals("চালান")
                 || value.equals("play video")
