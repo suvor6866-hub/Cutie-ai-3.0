@@ -3,10 +3,18 @@ package com.suvor.cutieai;
 import android.accessibilityservice.AccessibilityService;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.os.Handler;
+import android.os.Looper;
 
 public class DeviceControlService extends AccessibilityService {
     private static DeviceControlService instance;
     private boolean playClicked = false;
+    private static volatile boolean autoClickEnabled = false;
+
+    public static void armAutoClickAfterSearch() {
+        autoClickEnabled = false;
+        new Handler(Looper.getMainLooper()).postDelayed(() -> autoClickEnabled = true, 2500);
+    }
 
     @Override
     protected void onServiceConnected() {
@@ -29,13 +37,14 @@ public class DeviceControlService extends AccessibilityService {
             playClicked = false;
         }
 
-        if (playClicked) return;
+        if (!autoClickEnabled || playClicked) return;
 
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
 
         if (clickPlayButton(root)) {
             playClicked = true;
+            autoClickEnabled = false;
         }
     }
 

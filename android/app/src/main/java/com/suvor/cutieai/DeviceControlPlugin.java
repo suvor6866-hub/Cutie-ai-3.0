@@ -21,6 +21,7 @@ public class DeviceControlPlugin extends Plugin {
         intent.setPackage("com.google.android.youtube");
 
         try {
+            DeviceControlService.armAutoClickAfterSearch();
             getActivity().startActivity(intent);
             call.resolve();
         } catch (Exception e) {

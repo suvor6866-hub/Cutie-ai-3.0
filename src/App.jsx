@@ -104,7 +104,7 @@ const command = text.toLowerCase();
 
 // YouTube Music Voice Command
 if (/(গান|সঙ্গীত|song|music|youtube|ইউটিউব|play)/i.test(command) &&
-    /(চালাও|শোনাও|play|খোলো|খুলে|open|start)/i.test(command)) {
+    /(চালাও|শোনাও|চালাও|chalao|chalaw|chala|play|খোলো|খুলে|open|start)/i.test(command)) {
   try {
     await DeviceControl.openYouTubeSearch({
             query: text
