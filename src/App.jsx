@@ -196,78 +196,105 @@ if (/(গান|সঙ্গীত|song|music|youtube|ইউটিউব|play)/i
     }
   };
   const handlePhoneCommand = async (text) => {
-    if (Capacitor.getPlatform() !== 'android') return false;
-    const value = text.trim().toLowerCase();
+  if (Capacitor.getPlatform() !== 'android') return false;
 
-    if (pendingAction) {
-      if (/^(হ্যাঁ|হ্যা|জি|জ্বি|yes|হ্যাঁ করো|করো)$/.test(value)) {
-        await executePendingPhoneAction();
-        return true;
-      }
-      if (/^(না|নাহ|no|বাতিল|করবে না)$/.test(value)) {
-        setPendingAction(null);
-        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'ঠিক আছে Boss, কাজটি বাতিল করলাম 💜'}]);
-        return true;
-      }
-      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'Boss, কাজটি করতে হলে হ্যাঁ অথবা না বলো।'}]);
+  const value = text.trim().toLowerCase();
+  const yes = /^(হ্যাঁ|হ্যা|জি|জ্বি|yes|yeah|হ্যাঁ করো|করো|ঠিক আছে|কর)$/u.test(value);
+  const no = /^(না|নাহ|no|বাতিল|করবে না|করো না|থাক)$/u.test(value);
+
+  if (pendingAction) {
+    if (yes) {
+      await executePendingPhoneAction();
       return true;
     }
-
-    if (smsRecipient) {
-      setPendingAction({type: 'sms', contact: smsRecipient, message: text.trim()});
+    if (no) {
+      setPendingAction(null);
       setSmsRecipient(null);
-      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: smsRecipient.name + ' কে এই মেসেজ পাঠাব: ' + text.trim() + '। Boss, হ্যাঁ বলবে?'}]);
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'ঠিক আছে Boss, কাজটি বাতিল করলাম 💜'}]);
       return true;
     }
-
-    if (/(এসএমএস|sms).*(পড়|পড়|শোনাও)|(পড়|পড়|শোনাও).*(এসএমএস|sms)/i.test(value)) {
-      setPendingAction({type: 'readSms'});
-      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'সাম্প্রতিক SMS পড়ে শোনাব Boss? হ্যাঁ বলো।'}]);
-      return true;
-    }
-
-    const isCall = /(ফোন|কল|call|ডায়াল|ডায়াল)/i.test(value);
-    const isSms = /(মেসেজ|মেসেজ পাঠাও|sms|message|টেক্সট)/i.test(value);
-    const isFind = /(খুঁজে|নম্বর|নাম্বার|contact|কন্টাক্ট)/i.test(value);
-    if (!isCall && !isSms && !isFind) return false;
-
-    let name = text
-      .replace(/(আমার|একটু|দয়া করে|দয়া করে|প্লিজ|please|ফোন করো|কল করো|কল দাও|ফোন দাও|ডায়াল করো|ডায়াল করো|মেসেজ পাঠাও|এসএমএস পাঠাও|sms পাঠাও|message পাঠাও|নম্বর বলো|নাম্বার বলো|খুঁজে দাও|খুঁজে বের করো|কন্টাক্ট খোঁজো|contact খোঁজো|কে ফোন করো|কে কল করো|কে মেসেজ করো)/gi, '')
-      .replace(/[।,?!]/g, '').trim();
-    name = name.replace(/(কে|র কাছে|কে ফোন)$/u, '').trim();
-    if (!name) {
-      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'কাকে খুঁজব Boss? নামটা বলো।'}]);
-      return true;
-    }
-
-    try {
-      const result = await DeviceControl.searchContact({name});
-      const contacts = result.contacts || [];
-      if (!contacts.length) {
-        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: name + ' নামে কোনো Contact পেলাম না Boss।'}]);
-        return true;
-      }
-      if (contacts.length > 1) {
-        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'একাধিক Contact পেয়েছি: ' + contacts.slice(0, 5).map(c => c.name + ' (' + c.number + ')').join(', ') + '। সঠিক নামটি বলো Boss।'}]);
-        return true;
-      }
-      const contact = contacts[0];
-      if (isCall) {
-        setPendingAction({type: 'call', contact});
-        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' (' + contact.number + ') কে কল করব Boss? হ্যাঁ বলো, না বললে বাতিল।'}]);
-      } else if (isSms) {
-        setSmsRecipient(contact);
-        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' কে কী মেসেজ পাঠাব Boss? মেসেজটি বলো।'}]);
-      } else {
-        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' এর নম্বর ' + contact.number}]);
-      }
-    } catch (err) {
-      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'Contact খুঁজতে সমস্যা হয়েছে Boss: ' + err.message}]);
-    }
+    setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'Boss, কাজটি করতে হ্যাঁ অথবা বাতিল করতে না বলো।'}]);
     return true;
-  };
+  }
 
-  const sendMessage = async (e, voiceText) => {
+  if (smsRecipient) {
+    if (no) {
+      setSmsRecipient(null);
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'ঠিক আছে Boss, মেসেজ লেখা বাতিল করলাম 💜'}]);
+      return true;
+    }
+    const recipient = smsRecipient;
+    setSmsRecipient(null);
+    setPendingAction({type: 'sms', contact: recipient, message: text.trim()});
+    setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: recipient.name + ' কে এই মেসেজ পাঠাব: ' + text.trim() + '। পাঠাতে হ্যাঁ, বাতিল করতে না বলো Boss।'}]);
+    return true;
+  }
+
+  if (/(এসএমএস|sms).*(পড়|পড়|শোনাও)|(পড়|পড়|শোনাও).*(এসএমএস|sms)/i.test(value)) {
+    setPendingAction({type: 'readSms'});
+    setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'সাম্প্রতিক SMS পড়ে শোনাব Boss? হ্যাঁ বলো।'}]);
+    return true;
+  }
+
+  const isCall = /(ফোন|কল|call|ডায়াল|ডায়াল)/i.test(value);
+  const isSms = /(মেসেজ|sms|message|টেক্সট)/i.test(value);
+  const isFind = /(খুঁজে|নম্বর|নাম্বার|contact|কন্টাক্ট)/i.test(value);
+  if (!isCall && !isSms && !isFind) return false;
+
+  let name = text
+    .replace(/(আমার|একটু|দয়া করে|দয়া করে|প্লিজ|please|ফোন করো|কল করো|কল দাও|ফোন দাও|ডায়াল করো|ডায়াল করো|মেসেজ পাঠাও|এসএমএস পাঠাও|sms পাঠাও|message পাঠাও|নম্বর বলো|নাম্বার বলো|খুঁজে দাও|খুঁজে বের করো|কন্টাক্ট খোঁজো|contact খোঁজো|কে ফোন করো|কে কল করো|কে মেসেজ করো)/giu, '')
+    .replace(/[।,?!]/g, '')
+    .trim();
+
+  const relations = [
+    [/মাকে|মায়ের|মায়ের/g, 'মা'],
+    [/বাবাকে|বাবার/g, 'বাবা'],
+    [/দাদাকে|দাদার/g, 'দাদা'],
+    [/দিদিকে|দিদির/g, 'দিদি'],
+    [/ভাইকে|ভাইয়ের|ভাইয়ের/g, 'ভাই'],
+    [/বোনকে|বোনের/g, 'বোন']
+  ];
+  for (const [pattern, replacement] of relations) {
+    name = name.replace(pattern, replacement);
+  }
+  name = name.replace(/(কে|এর কাছে|র কাছে)$/u, '').trim();
+
+  if (!name) {
+    setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'কাকে খুঁজব Boss? নামটা বলো।'}]);
+    return true;
+  }
+
+  try {
+    const result = await DeviceControl.searchContact({name});
+    const contacts = result.contacts || [];
+
+    if (!contacts.length) {
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: name + ' নামে কোনো Contact পেলাম না Boss।'}]);
+      return true;
+    }
+
+    if (contacts.length > 1) {
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'একাধিক Contact পেয়েছি: ' + contacts.slice(0, 5).map(c => c.name + ' (' + c.number + ')').join(', ') + '। সঠিক নামটি বলো Boss।'}]);
+      return true;
+    }
+
+    const contact = contacts[0];
+    if (isCall) {
+      setPendingAction({type: 'call', contact});
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' (' + contact.number + ') কে কল করব Boss? হ্যাঁ বলো, না বললে বাতিল।'}]);
+    } else if (isSms) {
+      setSmsRecipient(contact);
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' কে কী মেসেজ পাঠাব Boss? মেসেজটি বলো। বাতিল করতে না বলো।'}]);
+    } else {
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' এর নম্বর ' + contact.number}]);
+    }
+  } catch (err) {
+    setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'Contact খুঁজতে সমস্যা হয়েছে Boss: ' + err.message}]);
+  }
+  return true;
+};
+
+const sendMessage = async (e, voiceText) => {
     if (e) e.preventDefault();
     const message = (voiceText || draft).trim();
     if (!message) return;
