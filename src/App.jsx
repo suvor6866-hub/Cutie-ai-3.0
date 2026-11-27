@@ -242,24 +242,31 @@ if (/(গান|সঙ্গীত|song|music|youtube|ইউটিউব|play)/i
   if (!isCall && !isSms && !isFind) return false;
 
   let name = text
-    .replace(/(আমার|একটু|দয়া করে|দয়া করে|প্লিজ|please|ফোন করো|কল করো|কল দাও|ফোন দাও|ডায়াল করো|ডায়াল করো|মেসেজ পাঠাও|এসএমএস পাঠাও|sms পাঠাও|message পাঠাও|নম্বর বলো|নাম্বার বলো|খুঁজে দাও|খুঁজে বের করো|কন্টাক্ট খোঁজো|contact খোঁজো|কে ফোন করো|কে কল করো|কে মেসেজ করো)/giu, '')
-    .replace(/[।,?!]/g, '')
-    .trim();
+      .replace(/^(?:(?:please|boss|cutie|একটু|আমাকে)\s*)+/giu, '')
+      .replace(/\b(?:please|call|phone|dial|message|sms|koro|karo|karna|kijiye|bhejo|bhej|find|search|contact|number)\b/giu, ' ')
+      .replace(/(?:ফোন করো|ফোন করুন|কল করো|কল করুন|কল দাও|ডায়াল করো|ডায়াল করো|মেসেজ পাঠাও|এসএমএস পাঠাও|খুঁজে দাও|খুঁজে বের করো|নম্বর বলো|নাম্বার বলো|কন্টাক্ট খোঁজো)/giu, ' ')
+      .replace(/\b(?:ke|ko|ka|ki|keliye|liye|mein|par|se)\b/giu, ' ')
+      .replace(/(কে|এর কাছে|র কাছে)$/u, '')
+      .replace(/[।,?!]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  const relations = [
-    [/মাকে|মায়ের|মায়ের/g, 'মা'],
-    [/বাবাকে|বাবার/g, 'বাবা'],
-    [/দাদাকে|দাদার/g, 'দাদা'],
-    [/দিদিকে|দিদির/g, 'দিদি'],
-    [/ভাইকে|ভাইয়ের|ভাইয়ের/g, 'ভাই'],
-    [/বোনকে|বোনের/g, 'বোন']
-  ];
-  for (const [pattern, replacement] of relations) {
-    name = name.replace(pattern, replacement);
-  }
-  name = name.replace(/(কে|এর কাছে|র কাছে)$/u, '').trim();
+    const relations = [
+      [/মাকে|মায়ের|মায়ের/g, 'মা'],
+      [/বাবাকে|বাবার/g, 'বাবা'],
+      [/দাদাকে|দাদার/g, 'দাদা'],
+      [/দিদিকে|দিদির/g, 'দিদি'],
+      [/ভাইকে|ভাইয়ের|ভাইয়ের/g, 'ভাই'],
+      [/বোনকে|বোনের/g, 'বোন']
+    ];
 
-  if (!name) {
+    for (const [pattern, replacement] of relations) {
+      name = name.replace(pattern, replacement);
+    }
+
+    name = name.replace(/\s+/g, ' ').trim();
+
+    if (!name) {
     setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'কাকে খুঁজব Boss? নামটা বলো।'}]);
     return true;
   }
