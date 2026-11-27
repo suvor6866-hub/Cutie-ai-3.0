@@ -28,6 +28,8 @@ export default function App() {
   const [liveStatus, setLiveStatus] = useState('Live বন্ধ');
   const [active, setActive] = useState('Home');
   const [messages, setMessages] = useState([]);
+  const [pendingAction, setPendingAction] = useState(null);
+  const [smsRecipient, setSmsRecipient] = useState(null);
   const [draft, setDraft] = useState('');
   const [profileName, setProfileName] = useState(() => localStorage.getItem('cutieProfileName') || 'Boss');
   const [profileLanguage, setProfileLanguage] = useState(() => localStorage.getItem('cutieProfileLanguage') || 'বাংলা');
@@ -177,10 +179,99 @@ if (/(গান|সঙ্গীত|song|music|youtube|ইউটিউব|play)/i
     return true;
   };
 
+  const executePendingPhoneAction = async () => {
+    const action = pendingAction;
+    if (!action) return;
+    setPendingAction(null);
+    try {
+      if (action.type === "call") await DeviceControl.dialNumber({number: action.contact.number});
+      if (action.type === "sms") await DeviceControl.composeSms({number: action.contact.number, message: action.message});
+      if (action.type === "readSms") {
+        const result = await DeviceControl.readLatestSms();
+        const list = result.messages || [];
+        setMessages(prev => [...prev, {id: Date.now(), role: "cutie", text: list.length ? list.slice(0,5).map(m => m.number + ": " + m.message).join("\n") : "কোনো SMS পাওয়া যায়নি।"}]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, {id: Date.now(), role: "cutie", text: "সমস্যা হয়েছে Boss: " + err.message}]);
+    }
+  };
+  const handlePhoneCommand = async (text) => {
+    if (Capacitor.getPlatform() !== 'android') return false;
+    const value = text.trim().toLowerCase();
+
+    if (pendingAction) {
+      if (/^(হ্যাঁ|হ্যা|জি|জ্বি|yes|হ্যাঁ করো|করো)$/.test(value)) {
+        await executePendingPhoneAction();
+        return true;
+      }
+      if (/^(না|নাহ|no|বাতিল|করবে না)$/.test(value)) {
+        setPendingAction(null);
+        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'ঠিক আছে Boss, কাজটি বাতিল করলাম 💜'}]);
+        return true;
+      }
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'Boss, কাজটি করতে হলে হ্যাঁ অথবা না বলো।'}]);
+      return true;
+    }
+
+    if (smsRecipient) {
+      setPendingAction({type: 'sms', contact: smsRecipient, message: text.trim()});
+      setSmsRecipient(null);
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: smsRecipient.name + ' কে এই মেসেজ পাঠাব: ' + text.trim() + '। Boss, হ্যাঁ বলবে?'}]);
+      return true;
+    }
+
+    if (/(এসএমএস|sms).*(পড়|পড়|শোনাও)|(পড়|পড়|শোনাও).*(এসএমএস|sms)/i.test(value)) {
+      setPendingAction({type: 'readSms'});
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'সাম্প্রতিক SMS পড়ে শোনাব Boss? হ্যাঁ বলো।'}]);
+      return true;
+    }
+
+    const isCall = /(ফোন|কল|call|ডায়াল|ডায়াল)/i.test(value);
+    const isSms = /(মেসেজ|মেসেজ পাঠাও|sms|message|টেক্সট)/i.test(value);
+    const isFind = /(খুঁজে|নম্বর|নাম্বার|contact|কন্টাক্ট)/i.test(value);
+    if (!isCall && !isSms && !isFind) return false;
+
+    let name = text
+      .replace(/(আমার|একটু|দয়া করে|দয়া করে|প্লিজ|please|ফোন করো|কল করো|কল দাও|ফোন দাও|ডায়াল করো|ডায়াল করো|মেসেজ পাঠাও|এসএমএস পাঠাও|sms পাঠাও|message পাঠাও|নম্বর বলো|নাম্বার বলো|খুঁজে দাও|খুঁজে বের করো|কন্টাক্ট খোঁজো|contact খোঁজো|কে ফোন করো|কে কল করো|কে মেসেজ করো)/gi, '')
+      .replace(/[।,?!]/g, '').trim();
+    name = name.replace(/(কে|র কাছে|কে ফোন)$/u, '').trim();
+    if (!name) {
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'কাকে খুঁজব Boss? নামটা বলো।'}]);
+      return true;
+    }
+
+    try {
+      const result = await DeviceControl.searchContact({name});
+      const contacts = result.contacts || [];
+      if (!contacts.length) {
+        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: name + ' নামে কোনো Contact পেলাম না Boss।'}]);
+        return true;
+      }
+      if (contacts.length > 1) {
+        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'একাধিক Contact পেয়েছি: ' + contacts.slice(0, 5).map(c => c.name + ' (' + c.number + ')').join(', ') + '। সঠিক নামটি বলো Boss।'}]);
+        return true;
+      }
+      const contact = contacts[0];
+      if (isCall) {
+        setPendingAction({type: 'call', contact});
+        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' (' + contact.number + ') কে কল করব Boss? হ্যাঁ বলো, না বললে বাতিল।'}]);
+      } else if (isSms) {
+        setSmsRecipient(contact);
+        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' কে কী মেসেজ পাঠাব Boss? মেসেজটি বলো।'}]);
+      } else {
+        setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' এর নম্বর ' + contact.number}]);
+      }
+    } catch (err) {
+      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: 'Contact খুঁজতে সমস্যা হয়েছে Boss: ' + err.message}]);
+    }
+    return true;
+  };
+
   const sendMessage = async (e, voiceText) => {
     if (e) e.preventDefault();
     const message = (voiceText || draft).trim();
     if (!message) return;
+    if (await handlePhoneCommand(message)) { setDraft(''); return; }
     if (await handleDeviceControl(message)) { setDraft(''); return; }
     if (await openRequestedApp(message)) { setDraft(''); return; }
 
@@ -325,7 +416,12 @@ if (/(গান|সঙ্গীত|song|music|youtube|ইউটিউব|play)/i
               </div>
             ))}
           </div>
-          <form className="premium-chat-input" onSubmit={sendMessage}>
+          {pendingAction && <div className="confirmation-actions">
+<p>Boss, কাজটি করতে অনুমতি দেবে? 💜</p>
+<button type="button" onClick={executePendingPhoneAction}>হ্যাঁ, করো</button>
+<button type="button" onClick={() => { setPendingAction(null); setMessages(prev => [...prev, {id: Date.now(), role: "cutie", text: "ঠিক আছে Boss, বাতিল করলাম 💜"}]); }}>না, করো না</button>
+</div>}
+<form className="premium-chat-input" onSubmit={sendMessage}>
             <button type="button">＋</button>
             <input value={draft}
               onChange={e => setDraft(e.target.value)}
