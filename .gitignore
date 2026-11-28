@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Cutie AI private memory data
+server/data/
+
+# Local backups
+*.backup
+*.before-*
+*.memory-backup
+*.backup-*

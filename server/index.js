@@ -1,6 +1,16 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
+
+// Cutie AI Long-Term Memory storage
+const MEMORY_FILE = path.join(__dirname, "data", "memories.json");
+const MEMORY_DIR = path.dirname(MEMORY_FILE);
+if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true });
+if (!fs.existsSync(MEMORY_FILE)) {
+  fs.writeFileSync(MEMORY_FILE, JSON.stringify({ users: {} }, null, 2));
+}
 
 const app = express();
 app.use(cors());
@@ -65,52 +75,191 @@ async function askOpenAI(message) {
   return data.choices[0].message.content;
 }
 
+
+// Read and save Cutie AI long-term memories
+function readMemories() {
+  try {
+    return JSON.parse(fs.readFileSync(MEMORY_FILE, "utf8"));
+  } catch (error) {
+    return { users: {} };
+  }
+}
+
+function saveMemories(data) {
+  fs.writeFileSync(MEMORY_FILE, JSON.stringify(data, null, 2));
+}
+
 app.get("/", (req, res) => res.send("Cutie AI Backend is running!"));
+
+
+// Get or create one user's memory profile
+function getUserMemory(userId) {
+  const data = readMemories();
+  if (!data.users[userId]) {
+    data.users[userId] = {
+      facts: [],
+      history: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    saveMemories(data);
+  }
+  return data.users[userId];
+}
+
+// Save an important memory without storing every casual message
+function rememberImportantFact(userId, message) {
+  const text = message.trim();
+  const patterns = [
+    /মনে রাখো|মনে রেখো|মনে রাখবে|remember that|please remember/i,
+    /আমার নাম|আমার পছন্দ|আমি পছন্দ করি|আমার লক্ষ্য|আমার কাজ হলো/i,
+    /my name is|i prefer|i like|my goal is|i work as/i
+  ];
+
+  if (!patterns.some(pattern => pattern.test(text))) return;
+
+  const data = readMemories();
+  const user = data.users[userId] || {
+    facts: [], history: [], createdAt: new Date().toISOString()
+  };
+
+  if (!user.facts.some(item => item.text === text)) {
+    user.facts.push({
+      text,
+      createdAt: new Date().toISOString()
+    });
+  }
+
+  user.updatedAt = new Date().toISOString();
+  data.users[userId] = user;
+  saveMemories(data);
+}
+
+app.get("/api/memory/:userId", (req, res) => {
+  const userId = String(req.params.userId || "").slice(0, 100);
+  if (!userId) return res.status(400).json({ error: "User ID required" });
+
+  const user = getUserMemory(userId);
+  res.json({
+    facts: user.facts,
+    history: user.history.slice(-20),
+    updatedAt: user.updatedAt
+  });
+});
+
+app.post("/api/memory/:userId", (req, res) => {
+  const userId = String(req.params.userId || "").slice(0, 100);
+  const text = req.body.text;
+
+  if (!userId || typeof text !== "string" || !text.trim()) {
+    return res.status(400).json({ error: "User ID and memory text required" });
+  }
+
+  const data = readMemories();
+  const user = data.users[userId] || {
+    facts: [], history: [], createdAt: new Date().toISOString()
+  };
+
+  user.facts.push({
+    text: text.trim().slice(0, 1000),
+    createdAt: new Date().toISOString()
+  });
+  user.updatedAt = new Date().toISOString();
+  data.users[userId] = user;
+  saveMemories(data);
+
+  res.json({ success: true, facts: user.facts });
+});
+
+app.delete("/api/memory/:userId", (req, res) => {
+  const userId = String(req.params.userId || "").slice(0, 100);
+  const data = readMemories();
+  delete data.users[userId];
+  saveMemories(data);
+  res.json({ success: true, message: "User memory cleared" });
+});
 
 app.post("/api/chat", async (req, res) => {
   const message = req.body.message;
+  const userId = String(req.body.userId || "default-user").slice(0, 100);
+
   if (!message || typeof message !== "string") {
     return res.status(400).json({ error: "Message required" });
   }
 
-  const aiMessage = `
+  try {
+    rememberImportantFact(userId, message);
+
+    const data = readMemories();
+    const user = data.users[userId] || { facts: [], history: [] };
+
+    const memoryContext = user.facts.length
+      ? user.facts.map(item => "- " + item.text).join("\\n")
+      : "No saved personal facts yet.";
+
+    const recentHistory = user.history.slice(-10)
+      .map(item => item.role + ": " + item.text)
+      .join("\\n");
+
+    const aiMessage = `
 You are Cutie AI, Boss's friendly and emotionally intelligent female AI companion.
 
 PERSONALITY:
 - Speak naturally, warmly and affectionately.
-- Always address the user as Boss.
+- Address the user as Boss.
 - Default language is Bengali.
-- Understand and reply in Bengali, Hindi or English according to the user's language.
-- Sound like a caring real conversational companion, not a robot.
+- Reply in Bengali, Hindi or English according to the user's language.
 - Understand emotional context and respond with empathy.
-- If Boss feels sad, listen patiently and offer comfort.
-- Ask natural follow-up questions when appropriate.
-- Keep casual replies concise and engaging.
-- Never pretend to have human feelings, a body or real-world experiences.
 - Never invent memories or claim to perform actions you cannot perform.
 
-User message:
+SAVED LONG-TERM MEMORY:
+${memoryContext}
+
+RECENT CONVERSATION:
+${recentHistory || "This is the start of the conversation."}
+
+Use saved memories only when relevant. If a memory is uncertain, ask Boss instead of guessing.
+
+CURRENT USER MESSAGE:
 ${message}
 `;
 
-  const providers = [
-    ["OpenRouter", askOpenRouter],
-    ["Gemini", askGemini],
-    ["OpenAI", askOpenAI]
-  ];
+    const providers = [
+      ["OpenRouter", askOpenRouter],
+      ["Gemini", askGemini],
+      ["OpenAI", askOpenAI]
+    ];
 
-  for (const [name, provider] of providers) {
-    try {
-      const reply = await provider(aiMessage);
-      return res.json({ reply, provider: name });
-    } catch (error) {
-      console.log(name + " failed:", error.message);
+    for (const [name, provider] of providers) {
+      try {
+        const reply = await provider(aiMessage);
+
+        const latest = readMemories();
+        const profile = latest.users[userId] || {
+          facts: [], history: [], createdAt: new Date().toISOString()
+        };
+
+        profile.history.push(
+          { role: "Boss", text: message.slice(0, 2000), time: new Date().toISOString() },
+          { role: "Cutie", text: String(reply).slice(0, 2000), time: new Date().toISOString() }
+        );
+        profile.history = profile.history.slice(-40);
+        profile.updatedAt = new Date().toISOString();
+        latest.users[userId] = profile;
+        saveMemories(latest);
+
+        return res.json({ reply, provider: name });
+      } catch (error) {
+        console.log(name + " failed:", error.message);
+      }
     }
+
+    return res.status(503).json({ error: "All AI providers failed. Check API keys." });
+  } catch (error) {
+    console.error("Memory/Chat error:", error);
+    return res.status(500).json({ error: "Chat memory error" });
   }
-
-  res.status(503).json({ error: "All AI providers failed. Check API keys." });
 });
-
 
 app.post("/api/voice", async (req, res) => {
   try {
@@ -155,7 +304,7 @@ app.post("/api/voice", async (req, res) => {
 const http = require("http");
 const attachLive = require("./live");
 const server = http.createServer(app);
-attachLive(server);
+attachLive(server, { getUserMemory, rememberImportantFact });
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Cutie AI Backend running on port ${PORT}`);

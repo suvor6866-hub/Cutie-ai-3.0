@@ -31,6 +31,14 @@ export default function App() {
   const [pendingAction, setPendingAction] = useState(null);
   const [smsRecipient, setSmsRecipient] = useState(null);
   const [draft, setDraft] = useState('');
+  const [userId] = useState(() => {
+    let id = localStorage.getItem("cutieUserId");
+    if (!id) {
+      id = "cutie-" + Date.now() + "-" + Math.random().toString(36).slice(2);
+      localStorage.setItem("cutieUserId", id);
+    }
+    return id;
+  });
   const [profileName, setProfileName] = useState(() => localStorage.getItem('cutieProfileName') || 'Boss');
   const [profileLanguage, setProfileLanguage] = useState(() => localStorage.getItem('cutieProfileLanguage') || 'বাংলা');
   const [profileVoice, setProfileVoice] = useState(() => localStorage.getItem('cutieProfileVoice') || 'Female');
@@ -80,6 +88,7 @@ export default function App() {
     }
 
     const live = createLiveVoice({
+      userId,
       onStatus: setLiveStatus,
       onText: (text) => {
         setMessages(prev => [...prev, {
@@ -318,7 +327,7 @@ const sendMessage = async (e, voiceText) => {
       const response = await fetch('https://cutie-ai-3-0.onrender.com/api/chat', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({message})
+        body: JSON.stringify({message, userId})
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'AI request failed');

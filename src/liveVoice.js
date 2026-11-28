@@ -1,4 +1,4 @@
-export function createLiveVoice({ onStatus, onText, onError }) {
+export function createLiveVoice({ userId, onStatus, onText, onError }) {
   let ws, stream, audioContext, processor, source;
   let nextPlayTime = 0;
   let stopped = false;
@@ -62,7 +62,7 @@ export function createLiveVoice({ onStatus, onText, onError }) {
       audioContext = new AudioContext();
       await audioContext.resume();
 
-      ws = new WebSocket("wss://cutie-ai-3-0.onrender.com/live");
+      ws = new WebSocket("wss://cutie-ai-3-0.onrender.com/live?userId=" + encodeURIComponent(userId));
 
       ws.onopen = () => {
         onStatus?.("Connected · কথা বলো Boss 💜");

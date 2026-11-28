@@ -1,17 +1,19 @@
 const { WebSocketServer, WebSocket } = require("ws");
 
-function attachLive(server) {
+function attachLive(server, memoryHelpers = {}) {
+  const { getUserMemory } = memoryHelpers;
   const wss = new WebSocketServer({ noServer: true });
 
   server.on("upgrade", (req, socket, head) => {
-    if (req.url !== "/live") return;
+    const requestUrl = new URL(req.url, "http://localhost");
+    if (requestUrl.pathname !== "/live") { socket.destroy(); return; }
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit("connection", ws, req);
     });
   });
 
-  wss.on("connection", async (client) => {
+  wss.on("connection", async (client, req) => {
     let session;
 
     try {
@@ -24,13 +26,31 @@ function attachLive(server) {
         apiKey: process.env.GEMINI_API_KEY
       });
 
+      const liveUrl = new URL(req.url, "http://localhost");
+      const userId = liveUrl.searchParams.get("userId") || "";
+      let memoryContext = "";
+
+      if (/^[a-zA-Z0-9_-]{1,100}$/.test(userId) && getUserMemory) {
+        const userMemory = getUserMemory(userId);
+        const facts = (userMemory.facts || [])
+          .map(item => typeof item === "string" ? item : item.text)
+          .filter(Boolean)
+          .slice(-30);
+
+        if (facts.length) {
+          memoryContext = "\n\nBoss-এর সংরক্ষিত মেমোরি:\n" +
+            facts.map((fact, i) => (i + 1) + ". " + fact).join("\n") +
+            "\nপ্রাসঙ্গিক হলে এই তথ্য ব্যবহার করবে।";
+        }
+      }
+
       session = await ai.live.connect({
         model: process.env.GEMINI_LIVE_MODEL ||
           "gemini-2.5-flash-native-audio-preview-12-2025",
         config: {
           responseModalities: ["AUDIO"],
           systemInstruction:
-            "You are Cutie AI, Boss's friendly female Bengali companion. Speak warmly and naturally. Call the user Boss. Understand Bengali, Hindi and English. Keep replies conversational."
+            "You are Cutie AI, Boss's friendly female Bengali companion. Speak warmly and naturally. Call the user Boss. Understand Bengali, Hindi and English. Keep replies conversational." + memoryContext
         },
         callbacks: {
           onopen: () => {
