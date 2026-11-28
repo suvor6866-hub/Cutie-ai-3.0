@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
+import android.icu.text.Transliterator;
 import android.net.Uri;
 import android.provider.Settings;
 import android.provider.ContactsContract;
@@ -90,10 +91,46 @@ public class DeviceControlPlugin extends Plugin {
         findContact(call);
     }
 
-    private void findContact(PluginCall call) {
-        String name = call.getString("name", "");
 
-        if (name.trim().isEmpty()) {
+    private String normalizeContactName(String value) {
+        return value.toLowerCase(java.util.Locale.ROOT)
+            .replaceAll("[^\\p{L}\\p{N}]", "");
+    }
+
+    private int editDistance(String a, String b) {
+        int[] prev = new int[b.length() + 1];
+        int[] curr = new int[b.length() + 1];
+
+        for (int j = 0; j <= b.length(); j++) prev[j] = j;
+
+        for (int i = 1; i <= a.length(); i++) {
+            curr[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                curr[j] = Math.min(
+                    Math.min(curr[j - 1] + 1, prev[j] + 1),
+                    prev[j - 1] + cost
+                );
+            }
+            int[] temp = prev;
+            prev = curr;
+            curr = temp;
+        }
+        return prev[b.length()];
+    }
+
+    private double nameSimilarity(String a, String b) {
+        if (a.equals(b)) return 1.0;
+        if (a.isEmpty() || b.isEmpty()) return 0.0;
+
+        int distance = editDistance(a, b);
+        return 1.0 - ((double) distance / Math.max(a.length(), b.length()));
+    }
+
+    private void findContact(PluginCall call) {
+        String name = call.getString("name", "").trim();
+
+        if (name.isEmpty()) {
             call.reject("Contact-এর নাম বলো");
             return;
         }
@@ -101,25 +138,95 @@ public class DeviceControlPlugin extends Plugin {
         Cursor cursor = null;
 
         try {
+            String searchName = normalizeContactName(name);
+            String romanName = searchName;
+
+            try {
+                Transliterator transliterator =
+                    Transliterator.getInstance("Bengali-Latin; Latin-ASCII");
+                romanName = normalizeContactName(
+                    transliterator.transliterate(name)
+                );
+            } catch (Exception ignored) {}
+
+            JSArray results = new JSArray();
+            java.util.ArrayList<JSObject> matches =
+                new java.util.ArrayList<>();
+            java.util.ArrayList<Double> scores =
+                new java.util.ArrayList<>();
+
             cursor = getContext().getContentResolver().query(
                 ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
                 new String[]{
                     ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
                     ContactsContract.CommonDataKinds.Phone.NUMBER
                 },
-                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " LIKE ?",
-                new String[]{"%" + name + "%"},
+                null,
+                null,
                 ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
             );
 
-            JSArray results = new JSArray();
-
             if (cursor != null) {
-                while (cursor.moveToNext() && results.length() < 10) {
-                    JSObject contact = new JSObject();
-                    contact.put("name", cursor.getString(0));
-                    contact.put("number", cursor.getString(1));
-                    results.put(contact);
+                while (cursor.moveToNext()) {
+                    String contactName = cursor.getString(0);
+                    String number = cursor.getString(1);
+
+                    if (contactName == null || number == null) continue;
+
+                    String normalized = normalizeContactName(contactName);
+
+                    double score = nameSimilarity(searchName, normalized);
+                    score = Math.max(score,
+                        nameSimilarity(romanName, normalized));
+
+                    String[] aliases = {
+                        "sukhdev", "sukhdeb", "sukhadeb",
+                        "rahul", "amit", "suvo", "shuvo",
+                        "shubh", "sourav", "saurav"
+                    };
+
+                    String[] bengaliNames = {
+                        "সুখদেব", "সুখদেব", "সুখদেব",
+                        "রাহুল", "অমিত", "শুভ", "শুভ",
+                        "শুভ", "সৌরভ", "সৌরভ"
+                    };
+
+                    for (int i = 0; i < aliases.length; i++) {
+                        if (searchName.equals(normalizeContactName(bengaliNames[i]))
+                            && normalized.equals(aliases[i])) {
+                            score = 1.0;
+                        }
+                    }
+
+                    if (score >= 0.72) {
+                        JSObject contact = new JSObject();
+                        contact.put("name", contactName);
+                        contact.put("number", number);
+                        matches.add(contact);
+                        scores.add(score);
+                    }
+                }
+            }
+
+            for (int i = 0; i < scores.size(); i++) {
+                for (int j = i + 1; j < scores.size(); j++) {
+                    if (scores.get(j) > scores.get(i)) {
+                        Double tempScore = scores.get(i);
+                        scores.set(i, scores.get(j));
+                        scores.set(j, tempScore);
+
+                        JSObject tempContact = matches.get(i);
+                        matches.set(i, matches.get(j));
+                        matches.set(j, tempContact);
+                    }
+                }
+            }
+
+            if (!scores.isEmpty()) {
+                double best = scores.get(0);
+                for (int i = 0; i < scores.size() && results.length() < 10; i++) {
+                    if (i > 0 && best - scores.get(i) > 0.12) break;
+                    results.put(matches.get(i));
                 }
             }
 
