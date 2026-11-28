@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SpeechRecognition } from '@capgo/capacitor-speech-recognition';
 import { AppLauncher } from '@capacitor/app-launcher';
 import { Capacitor, registerPlugin } from '@capacitor/core';
@@ -27,7 +27,45 @@ export default function App() {
   const liveVoiceRef = useRef(null);
   const [liveStatus, setLiveStatus] = useState('Live বন্ধ');
   const [active, setActive] = useState('Home');
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('cutieChatMessages') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('cutieChatMessages', JSON.stringify(messages));
+  }, [messages]);
+  const [historySearch, setHistorySearch] = useState('');
+  const [historyView, setHistoryView] = useState('all');
+  const [memoryFacts, setMemoryFacts] = useState([]);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+
+  useEffect(() => {
+    const loadMemoryTimeline = async () => {
+      setMemoryLoading(true);
+      try {
+        const response = await fetch(
+          'https://cutie-ai-3-0.onrender.com/api/memory/' + encodeURIComponent(userId)
+        );
+        if (!response.ok) throw new Error('Memory API failed');
+        const data = await response.json();
+        setMemoryFacts(Array.isArray(data.facts) ? data.facts : []);
+      } catch (error) {
+        console.error('Memory Timeline:', error);
+      } finally {
+        setMemoryLoading(false);
+      }
+    };
+    loadMemoryTimeline();
+  }, [userId, active]);
+
+  const [favoriteIds, setFavoriteIds] = useState(() => JSON.parse(localStorage.getItem('cutieFavoriteIds') || '[]'));
+  const [archivedIds, setArchivedIds] = useState(() => JSON.parse(localStorage.getItem('cutieArchivedIds') || '[]'));
+  useEffect(() => localStorage.setItem('cutieFavoriteIds', JSON.stringify(favoriteIds)), [favoriteIds]);
+  useEffect(() => localStorage.setItem('cutieArchivedIds', JSON.stringify(archivedIds)), [archivedIds]);
   const [pendingAction, setPendingAction] = useState(null);
   const [smsRecipient, setSmsRecipient] = useState(null);
   const [draft, setDraft] = useState('');
@@ -493,7 +531,104 @@ const sendMessage = async (e, voiceText) => {
             <button onClick={sendMessage}>➤</button>
           </div>
         </section>
-) : active === "Profile" ? (
+) : active === "History" ? (
+        <section className="other-page history-page">
+          <div className="avatar">◷</div>
+          <h1>Chat History</h1>
+          <p>Your conversations with Cutie 💜</p>
+
+          <input
+            value={historySearch}
+            onChange={e => setHistorySearch(e.target.value)}
+            placeholder="🔍 Search messages..."
+          />
+
+          <div className="history-tabs">
+            <button onClick={() => setHistoryView('all')}>All</button>
+            <button onClick={() => setHistoryView('favorites')}>⭐ Favourites</button>
+            <button onClick={() => setHistoryView('archive')}>📦 Archive</button>
+          </div>
+
+          <button onClick={() => {
+            const text = messages.map(m => (m.role === 'boss' ? 'Boss: ' : 'Cutie: ') + m.text).join('\n\n');
+            const blob = new Blob([text], {type: 'text/plain'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'Cutie-AI-History.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+          }}>📥 Export TXT</button>
+      <button onClick={() => {
+        const printWindow = window.open('', '_blank');
+        if (!printWindow) {
+          alert('PDF export-এর জন্য popup অনুমতি দাও Boss।');
+          return;
+        }
+        const escapeHtml = value => String(value).replace(/[&<>"']/g, c => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;',
+          '"': '&quot;', "'": '&#39;'
+        }[c]));
+        const rows = messages.map(m =>
+          '<p><b>' + (m.role === 'boss' ? 'Boss' : 'Cutie') +
+          ':</b> ' + escapeHtml(m.text) + '</p>'
+        ).join('');
+        printWindow.document.write(
+          '<html><head><title>Cutie AI History</title>' +
+          '<style>body{font-family:Arial;padding:24px;line-height:1.6}h1{color:#8b5cf6}p{border-bottom:1px solid #ddd;padding:8px 0}</style>' +
+          '</head><body><h1>Cutie AI Chat History</h1>' +
+          rows + '</body></html>'
+        );
+        printWindow.document.close();
+        printWindow.onload = () => {
+          printWindow.print();
+        };
+      }}>📄 Export PDF</button>
+
+          <div className="memory-timeline">
+        <h2>🧠 Memory Timeline</h2>
+        {memoryLoading ? <p>Loading memories...</p> :
+          memoryFacts.length === 0 ? <p>এখনও কোনো Memory Save হয়নি।</p> :
+          memoryFacts.slice().reverse().map((fact, index) => (
+            <div className="history-item" key={fact.id || index}>
+              <p>💜 {fact.text}</p>
+              <small>{fact.createdAt ? new Date(fact.createdAt).toLocaleString() : ''}</small>
+            </div>
+          ))
+        }
+      </div>
+      {messages.filter(msg => {
+            const archived = archivedIds.includes(msg.id);
+            const favorite = favoriteIds.includes(msg.id);
+            const matches = (msg.text || '').toLowerCase().includes(historySearch.toLowerCase());
+            return matches && (
+              historyView === 'archive' ? archived :
+              historyView === 'favorites' ? favorite && !archived :
+              !archived
+            );
+          }).slice().reverse().map(msg => (
+            <div className="history-item" key={msg.id}>
+              <p><b>{msg.role === 'boss' ? '👑 Boss' : '💜 Cutie'}</b></p>
+              <p>{msg.text}</p>
+              <button onClick={() => setFavoriteIds(prev =>
+                prev.includes(msg.id) ? prev.filter(id => id !== msg.id) : [...prev, msg.id]
+              )}>{favoriteIds.includes(msg.id) ? '⭐ Saved' : '☆ Favourite'}</button>
+              <button onClick={() => setArchivedIds(prev =>
+                prev.includes(msg.id) ? prev.filter(id => id !== msg.id) : [...prev, msg.id]
+              )}>{archivedIds.includes(msg.id) ? '↩ Restore' : '📦 Archive'}</button>
+              <button onClick={() => {
+                if (confirm('এই মেসেজটি Delete করবে Boss?')) {
+                  setMessages(prev => prev.filter(m => m.id !== msg.id));
+                  setFavoriteIds(prev => prev.filter(id => id !== msg.id));
+                  setArchivedIds(prev => prev.filter(id => id !== msg.id));
+                }
+              }}>🗑️ Delete</button>
+            </div>
+          ))}
+
+          <button onClick={() => setActive('Home')}>← Back Home</button>
+        </section>
+      ) : active === "Profile" ? (
           <section className="other-page">
             <div className="avatar">💜</div>
             <h1>My Profile</h1>

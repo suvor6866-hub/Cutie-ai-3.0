@@ -145,7 +145,7 @@ public class DeviceControlPlugin extends Plugin {
 
         try {
             Intent intent = new Intent(
-                Intent.ACTION_DIAL,
+                Intent.ACTION_CALL,
                 Uri.fromParts("tel", number, null)
             );
             getActivity().startActivity(intent);
