@@ -60,7 +60,7 @@ export default function App() {
       }
     };
     loadMemoryTimeline();
-  }, [userId, active]);
+  }, [active]);
 
   const [favoriteIds, setFavoriteIds] = useState(() => JSON.parse(localStorage.getItem('cutieFavoriteIds') || '[]'));
   const [archivedIds, setArchivedIds] = useState(() => JSON.parse(localStorage.getItem('cutieArchivedIds') || '[]'));
