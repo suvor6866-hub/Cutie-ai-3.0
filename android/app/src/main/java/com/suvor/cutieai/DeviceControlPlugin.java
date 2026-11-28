@@ -23,7 +23,8 @@ import com.getcapacitor.annotation.PermissionCallback;
     name = "DeviceControl",
     permissions = {
         @Permission(alias = "contacts", strings = {Manifest.permission.READ_CONTACTS}),
-        @Permission(alias = "sms", strings = {Manifest.permission.READ_SMS})
+        @Permission(alias = "sms", strings = {Manifest.permission.READ_SMS}),
+@Permission(alias = "callPhone", strings = {Manifest.permission.CALL_PHONE})
     }
 )
 public class DeviceControlPlugin extends Plugin {
@@ -133,16 +134,31 @@ public class DeviceControlPlugin extends Plugin {
         }
     }
 
-    // OPEN PHONE DIALER
+    // DIRECT PHONE CALL WITH ANDROID RUNTIME PERMISSION
     @PluginMethod
     public void dialNumber(PluginCall call) {
-        String number = call.getString("number", "");
+        if (getPermissionState("callPhone") != PermissionState.GRANTED) {
+            requestPermissionForAlias("callPhone", call, "callPhoneCallback");
+            return;
+        }
+        placeDirectCall(call);
+    }
 
-        if (number.trim().isEmpty()) {
+    @PermissionCallback
+    private void callPhoneCallback(PluginCall call) {
+        if (getPermissionState("callPhone") != PermissionState.GRANTED) {
+            call.reject("কল করার Permission Allow করতে হবে");
+            return;
+        }
+        placeDirectCall(call);
+    }
+
+    private void placeDirectCall(PluginCall call) {
+        String number = call.getString("number", "").trim();
+        if (number.isEmpty()) {
             call.reject("ফোন নম্বর পাওয়া যায়নি");
             return;
         }
-
         try {
             Intent intent = new Intent(
                 Intent.ACTION_CALL,
@@ -151,7 +167,7 @@ public class DeviceControlPlugin extends Plugin {
             getActivity().startActivity(intent);
             call.resolve();
         } catch (Exception e) {
-            call.reject("Phone Dialer খোলা যায়নি", e);
+            call.reject("সরাসরি কল করা যায়নি", e);
         }
     }
 

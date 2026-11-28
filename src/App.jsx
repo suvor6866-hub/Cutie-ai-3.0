@@ -334,9 +334,21 @@ if (/(গান|সঙ্গীত|song|music|youtube|ইউটিউব|play)/i
 
     const contact = contacts[0];
     if (isCall) {
-      setPendingAction({type: 'call', contact});
-      setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' (' + contact.number + ') কে কল করব Boss? হ্যাঁ বলো, না বললে বাতিল।'}]);
-    } else if (isSms) {
+            setMessages(prev => [...prev, {
+                id: Date.now(),
+                role: 'cutie',
+                text: contact.name + ' (' + contact.number + ') নম্বরে সরাসরি কল করছি Boss 📞'
+            }]);
+            try {
+                await DeviceControl.dialNumber({number: contact.number});
+            } catch (err) {
+                setMessages(prev => [...prev, {
+                    id: Date.now(),
+                    role: 'cutie',
+                    text: 'কল করা যায়নি Boss: ' + err.message
+                }]);
+            }
+        } else if (isSms) {
       setSmsRecipient(contact);
       setMessages(prev => [...prev, {id: Date.now(), role: 'cutie', text: contact.name + ' কে কী মেসেজ পাঠাব Boss? মেসেজটি বলো। বাতিল করতে না বলো।'}]);
     } else {
